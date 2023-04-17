@@ -15,7 +15,7 @@ app.config["SECRET_KEY"] = "jaishreeram"
 app.config["DEBUG"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=5)
 
-db = create_engine("mysql+pymysql://root:madhur531@0.0.0.0/practice?charset=utf8mb4")
+db = create_engine("mysql+pymysql://root:madhur531@0.0.0.0/practice?charset=utf8mb4", isolation_level="AUTOCOMMIT")
 
 def execute_query(query, action):
     try:
@@ -31,25 +31,33 @@ def execute_query(query, action):
                 return result
             
             conn.execute(text(query))
+            conn.commit()
             return {"success": True}
     except (Exception, exc.SQLAlchemyError) as e:
         print(e)
         return {"success": False}
+    
+@app.get("/")
+def index():
+    return render_template("home.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    email = ""
+    password = ""
     if req.method == "POST":
         email = req.form.get("email")
         password = req.form.get("password")
 
         if email and password:
-            result = execute_query(f"SELECT user_password AS pass FROM nis_users WHERE user_email = '{email}'", "select")
+            result = execute_query(f"SELECT user_name, user_password AS pass FROM nis_users WHERE user_email = '{email}'", "select")
 
             if result.get("success"):
                 if result.get("found"):
                     if check_password_hash(result.get("pass"), password):
                         flash("Logged In", category="success")
-                        return render_template("login.html")
+                        session["user_name"] = result.get("user_name")
+                        return render_template("home.html")
                     else:
                         flash("Password is incorrent", category="danger")
                 else:
@@ -59,7 +67,7 @@ def login():
         else: 
             flash("All fields are required", category="warning")
 
-    return render_template("login.html")
+    return render_template("login.html", email=email, password=password)
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
@@ -90,6 +98,11 @@ def signup():
             flash("All fields are required", category="warning")
     
     return render_template("signup.html")
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0")
